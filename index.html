@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Bias Detector</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .analyze-btn {
+            background: #667eea;
+            color: white;
+        }
+
+        .analyze-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .analyze-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .clear-btn {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .clear-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .results {
+            margin-top: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .result-label {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .label-left { color: #3b82f6; }
+        .label-center { color: #10b981; }
+        .label-right { color: #ef4444; }
+
+        .confidence-bars {
+            margin-top: 20px;
+        }
+
+        .confidence-item {
+            margin-bottom: 15px;
+        }
+
+        .confidence-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .confidence-bar {
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            border-radius: 15px;
+            transition: width 0.5s ease-out;
+            display: flex;
+            align-items: center;
+            padding-left: 10px;
+            color: white;
+            font-weight: 600;
+        }
+
+        .fill-left { background: #3b82f6; }
+        .fill-center { background: #10b981; }
+        .fill-right { background: #ef4444; }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fee;
+            color: #c00;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .info {
+            margin-top: 30px;
+            padding: 20px;
+            background: #e8f4fd;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        .info strong {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📰 News Bias Detector</h1>
+        <p class="subtitle">Analyze the political bias of any news article using AI</p>
+
+        <textarea id="articleInput" placeholder="Paste a news article here..."></textarea>
+
+        <div class="button-group">
+            <button class="analyze-btn" onclick="analyzeArticle()">Analyze Bias</button>
+            <button class="clear-btn" onclick="clearInput()">Clear</button>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Analyzing article...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="results" class="results">
+            <div class="result-label" id="resultLabel">Predicted Bias: <span id="biasLabel"></span></div>
+            
+            <div class="confidence-bars">
+                <div class="confidence-item">
+                    <div class="confidence-label">
+                        <span>Left</span>
+                        <span id="leftPercent">0%</span>
+                    </div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill fill-left" id="leftBar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="confidence-item">
+                    <div class="confidence-label">
+                        <span>Center</span>
+                        <span id="centerPercent">0%</span>
+                    </div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill fill-center" id="centerBar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="confidence-item">
+                    <div class="confidence-label">
+                        <span>Right</span>
+                        <span id="rightPercent">0%</span>
+                    </div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill fill-right" id="rightBar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info">
+            <strong>How it works:</strong> This tool uses a fine-tuned DistilBERT model trained on 30,000 labeled news articles. 
+            It analyzes the language, framing, and rhetoric to predict political bias. 
+            Trained on sources including Reuters, AP, Vox, Fox News, and more.
+        </div>
+    </div>
+
+    <script>
+        // REPLACE THIS WITH YOUR HUGGING FACE MODEL URL
+        const API_URL = "https://api-inference.huggingface.co/models/YOUR-USERNAME/news-bias-classifier";
+        
+        // REPLACE THIS WITH YOUR HUGGING FACE API TOKEN
+        // Get one at: https://huggingface.co/settings/tokens
+        const API_TOKEN = "YOUR_HF_TOKEN_HERE";
+
+        async function analyzeArticle() {
+            const text = document.getElementById('articleInput').value.trim();
+            
+            if (!text) {
+                showError('Please paste an article first');
+                return;
+            }
+
+            if (text.length < 100) {
+                showError('Article too short. Please paste a longer article (at least 100 characters)');
+                return;
+            }
+
+            // Show loading, hide results and errors
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').classList.remove('show');
+            document.getElementById('error').style.display = 'none';
+            document.querySelector('.analyze-btn').disabled = true;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_TOKEN}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ inputs: text })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const result = await response.json();
+                displayResults(result);
+
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Failed to analyze article. Please check your API token and try again.');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.querySelector('.analyze-btn').disabled = false;
+            }
+        }
+
+        function displayResults(result) {
+            // Hugging Face API returns array of label predictions with scores
+            // Format: [{"label": "LABEL_0", "score": 0.9}, ...]
+            // LABEL_0 = left, LABEL_1 = center, LABEL_2 = right
+            
+            const labelMap = {
+                'LABEL_0': 'left',
+                'LABEL_1': 'center',
+                'LABEL_2': 'right'
+            };
+
+            // Convert to our format
+            const scores = {
+                'left': 0,
+                'center': 0,
+                'right': 0
+            };
+
+            result[0].forEach(item => {
+                const label = labelMap[item.label];
+                scores[label] = item.score;
+            });
+
+            // Find highest score
+            const predicted = Object.entries(scores).reduce((a, b) => 
+                scores[a[0]] > scores[b[0]] ? a : b
+            )[0];
+
+            // Update label
+            const biasLabel = document.getElementById('biasLabel');
+            biasLabel.textContent = predicted.charAt(0).toUpperCase() + predicted.slice(1);
+            biasLabel.className = `label-${predicted}`;
+
+            // Update confidence bars
+            updateBar('left', scores.left);
+            updateBar('center', scores.center);
+            updateBar('right', scores.right);
+
+            // Show results
+            document.getElementById('results').classList.add('show');
+        }
+
+        function updateBar(label, score) {
+            const percent = (score * 100).toFixed(1);
+            document.getElementById(`${label}Percent`).textContent = `${percent}%`;
+            document.getElementById(`${label}Bar`).style.width = `${percent}%`;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function clearInput() {
+            document.getElementById('articleInput').value = '';
+            document.getElementById('results').classList.remove('show');
+            document.getElementById('error').style.display = 'none';
+        }
+
+        // Allow Enter key to trigger analysis (Ctrl+Enter)
+        document.getElementById('articleInput').addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                analyzeArticle();
+            }
+        });
+    </script>
+</body>
+</html>
