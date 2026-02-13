@@ -113,51 +113,122 @@
         }
 
         .result-label {
-            font-size: 1.3em;
-            font-weight: 600;
-            margin-bottom: 15px;
+            font-size: 1.5em;
+            font-weight: 700;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+
+        .result-score {
+            font-size: 1.1em;
+            color: #666;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .result-score span {
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
         }
 
         .label-left { color: #3b82f6; }
+        .label-left-leaning { color: #60a5fa; }
         .label-center { color: #10b981; }
+        .label-right-leaning { color: #f87171; }
         .label-right { color: #ef4444; }
 
-        .confidence-bars {
-            margin-top: 20px;
+        /* Spectrum gauge */
+        .spectrum-container {
+            margin-top: 10px;
+            margin-bottom: 25px;
         }
 
-        .confidence-item {
-            margin-bottom: 15px;
-        }
-
-        .confidence-label {
+        .spectrum-labels {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-
-        .confidence-bar {
-            height: 30px;
-            background: #e0e0e0;
-            border-radius: 15px;
-            overflow: hidden;
-        }
-
-        .confidence-fill {
-            height: 100%;
-            border-radius: 15px;
-            transition: width 0.5s ease-out;
-            display: flex;
-            align-items: center;
-            padding-left: 10px;
-            color: white;
+            font-size: 0.75em;
             font-weight: 600;
+            color: #888;
+            margin-bottom: 6px;
+            padding: 0 2px;
         }
 
-        .fill-left { background: #3b82f6; }
-        .fill-center { background: #10b981; }
-        .fill-right { background: #ef4444; }
+        .spectrum-bar {
+            position: relative;
+            height: 20px;
+            border-radius: 10px;
+            background: linear-gradient(to right, #3b82f6, #60a5fa 25%, #10b981 50%, #f87171 75%, #ef4444);
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.15);
+        }
+
+        .spectrum-marker {
+            position: absolute;
+            top: -8px;
+            width: 4px;
+            height: 36px;
+            background: #1e293b;
+            border-radius: 2px;
+            transform: translateX(-50%);
+            transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 0 0 3px rgba(30, 41, 59, 0.2);
+        }
+
+        .spectrum-marker::after {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid #1e293b;
+        }
+
+        .spectrum-ticks {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 2px;
+            margin-top: 4px;
+        }
+
+        .spectrum-ticks span {
+            font-size: 0.65em;
+            color: #aaa;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Secondary class breakdown */
+        .class-breakdown {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .class-item {
+            text-align: center;
+        }
+
+        .class-item .class-name {
+            font-size: 0.8em;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+
+        .class-item .class-value {
+            font-size: 1.1em;
+            font-weight: 700;
+        }
+
+        .class-value.cv-left { color: #3b82f6; }
+        .class-value.cv-center { color: #10b981; }
+        .class-value.cv-right { color: #ef4444; }
 
         .loading {
             text-align: center;
@@ -223,108 +294,156 @@
         <div id="error" class="error" style="display: none;"></div>
 
         <div id="results" class="results">
-            <div class="result-label" id="resultLabel">Predicted Bias: <span id="biasLabel"></span></div>
-            
-            <div class="confidence-bars">
-                <div class="confidence-item">
-                    <div class="confidence-label">
-                        <span>Left</span>
-                        <span id="leftPercent">0%</span>
-                    </div>
-                    <div class="confidence-bar">
-                        <div class="confidence-fill fill-left" id="leftBar" style="width: 0%"></div>
-                    </div>
-                </div>
+            <div class="result-label" id="resultLabel"><span id="biasLabel"></span></div>
+            <div class="result-score" id="resultScore">Bias Score: <span id="biasScore">0.00</span></div>
 
-                <div class="confidence-item">
-                    <div class="confidence-label">
-                        <span>Center</span>
-                        <span id="centerPercent">0%</span>
-                    </div>
-                    <div class="confidence-bar">
-                        <div class="confidence-fill fill-center" id="centerBar" style="width: 0%"></div>
-                    </div>
+            <div class="spectrum-container">
+                <div class="spectrum-labels">
+                    <span>Left</span>
+                    <span>Left-Leaning</span>
+                    <span>Center</span>
+                    <span>Right-Leaning</span>
+                    <span>Right</span>
                 </div>
+                <div class="spectrum-bar">
+                    <div class="spectrum-marker" id="spectrumMarker" style="left: 50%"></div>
+                </div>
+                <div class="spectrum-ticks">
+                    <span>-1.0</span>
+                    <span>-0.5</span>
+                    <span>0.0</span>
+                    <span>+0.5</span>
+                    <span>+1.0</span>
+                </div>
+            </div>
 
-                <div class="confidence-item">
-                    <div class="confidence-label">
-                        <span>Right</span>
-                        <span id="rightPercent">0%</span>
-                    </div>
-                    <div class="confidence-bar">
-                        <div class="confidence-fill fill-right" id="rightBar" style="width: 0%"></div>
-                    </div>
+            <div class="class-breakdown">
+                <div class="class-item">
+                    <div class="class-name">Left</div>
+                    <div class="class-value cv-left" id="leftPercent">0%</div>
+                </div>
+                <div class="class-item">
+                    <div class="class-name">Center</div>
+                    <div class="class-value cv-center" id="centerPercent">0%</div>
+                </div>
+                <div class="class-item">
+                    <div class="class-name">Right</div>
+                    <div class="class-value cv-right" id="rightPercent">0%</div>
                 </div>
             </div>
         </div>
 
         <div class="info">
-            <strong>How it works:</strong> This tool uses a fine-tuned DistilBERT model trained on 30,000 labeled news articles. 
-            It analyzes the language, framing, and rhetoric to predict political bias. 
-            Trained on sources including Reuters, AP, Vox, Fox News, and more.
+            <strong>How it works:</strong> This tool uses a fine-tuned DistilBERT model trained on 37,000+ individually labeled news articles.
+            It analyzes language, framing, and rhetoric to produce a continuous bias score from -1 (Left) to +1 (Right).
+            The score is computed from the model's class probabilities across Left, Center, and Right categories.
         </div>
     </div>
 
     <script>
-        // REPLACE THIS WITH YOUR HUGGING FACE MODEL URL
-        const API_URL = "https://api-inference.huggingface.co/models/joeljoy1912/news-bias-classifier";
-        
-        // REPLACE THIS WITH YOUR HUGGING FACE API TOKEN
-        // Get one at: https://huggingface.co/settings/tokens
-        const API_TOKEN = "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";
+        const SPACE_URL = "https://joeljoy1912-news-bias-classifier.hf.space";
 
         async function analyzeArticle() {
             const text = document.getElementById('articleInput').value.trim();
-            
+
             if (!text) {
                 showError('Please paste an article first');
                 return;
             }
-        
+
             if (text.length < 100) {
                 showError('Article too short. Please paste a longer article (at least 100 characters)');
                 return;
             }
-        
+
             document.getElementById('loading').style.display = 'block';
             document.getElementById('results').classList.remove('show');
             document.getElementById('error').style.display = 'none';
             document.querySelector('.analyze-btn').disabled = true;
-        
+
             try {
-                // NEW API endpoint - Gradio Space
-                const response = await fetch('https://joeljoy1912-news-bias-classifier.hf.space/api/predict', {
+                // Step 1: Submit prediction request to Gradio queue
+                const submitResponse = await fetch(`${SPACE_URL}/gradio_api/call/predict_bias`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ data: [text] })
                 });
-        
-                if (!response.ok) {
-                    throw new Error(`API error: ${response.status}`);
+
+                if (!submitResponse.ok) {
+                    throw new Error(`Submit error: ${submitResponse.status}`);
                 }
-        
-                const result = await response.json();
-                
-                // Gradio returns: {"data": [{"Left": 0.1, "Center": 0.2, "Right": 0.7}]}
-                const scores = result.data[0];
-                
-                // Find highest score
-                const predicted = Object.entries(scores).reduce((a, b) => 
-                    scores[a[0]] > scores[b[0]] ? a : b
-                )[0].toLowerCase();
-        
-                // Update display
-                document.getElementById('biasLabel').textContent = predicted.charAt(0).toUpperCase() + predicted.slice(1);
-                document.getElementById('biasLabel').className = `label-${predicted}`;
-        
-                updateBar('left', scores.Left || 0);
-                updateBar('center', scores.Center || 0);
-                updateBar('right', scores.Right || 0);
-        
+
+                const { event_id } = await submitResponse.json();
+
+                // Step 2: Fetch results via server-sent events stream
+                const resultResponse = await fetch(`${SPACE_URL}/gradio_api/call/predict_bias/${event_id}`);
+
+                if (!resultResponse.ok) {
+                    throw new Error(`Result error: ${resultResponse.status}`);
+                }
+
+                const responseText = await resultResponse.text();
+
+                // Parse SSE stream — find the "complete" event's data line
+                const lines = responseText.split('\n');
+                let outputData = null;
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].startsWith('event: complete')) {
+                        // The data line follows the event line
+                        const dataLine = lines[i + 1];
+                        if (dataLine && dataLine.startsWith('data: ')) {
+                            outputData = JSON.parse(dataLine.substring(6));
+                            break;
+                        }
+                    }
+                }
+
+                if (!outputData) {
+                    // Check if there was an error event
+                    for (let i = 0; i < lines.length; i++) {
+                        if (lines[i].startsWith('event: error')) {
+                            throw new Error('Model returned an error. It may still be loading.');
+                        }
+                    }
+                    throw new Error('No result received from model.');
+                }
+
+                // Gradio Label component returns: [{"label": "Left", "confidences": [...]}]
+                // outputData is an array matching the output components
+                const labelData = outputData[0];
+
+                // Extract probabilities from confidences array
+                let leftProb = 0, centerProb = 0, rightProb = 0;
+                if (labelData.confidences) {
+                    for (const item of labelData.confidences) {
+                        if (item.label === 'Left') leftProb = item.confidence;
+                        else if (item.label === 'Center') centerProb = item.confidence;
+                        else if (item.label === 'Right') rightProb = item.confidence;
+                    }
+                }
+
+                // Compute continuous bias score: -1 (left) to +1 (right)
+                const biasResult = computeBiasScore(leftProb, centerProb, rightProb);
+
+                // Update spectrum display
+                document.getElementById('biasLabel').textContent = biasResult.label;
+                document.getElementById('biasLabel').className = `label-${biasResult.cssClass}`;
+
+                const scoreStr = (biasResult.score >= 0 ? '+' : '') + biasResult.score.toFixed(2);
+                document.getElementById('biasScore').textContent = scoreStr;
+                document.getElementById('biasScore').style.color = biasResult.color;
+
+                // Position marker on spectrum: convert [-1, +1] to [0%, 100%]
+                const markerPercent = ((biasResult.score + 1) / 2) * 100;
+                document.getElementById('spectrumMarker').style.left = `${markerPercent}%`;
+
+                // Update class breakdown percentages
+                document.getElementById('leftPercent').textContent = `${(leftProb * 100).toFixed(1)}%`;
+                document.getElementById('centerPercent').textContent = `${(centerProb * 100).toFixed(1)}%`;
+                document.getElementById('rightPercent').textContent = `${(rightProb * 100).toFixed(1)}%`;
+
                 document.getElementById('results').classList.add('show');
-        
+
             } catch (error) {
                 console.error('Error:', error);
                 showError('Failed to analyze article. The model may be loading (wait 30s and try again).');
@@ -333,52 +452,35 @@
                 document.querySelector('.analyze-btn').disabled = false;
             }
         }
-        function displayResults(result) {
-            // Hugging Face API returns array of label predictions with scores
-            // Format: [{"label": "LABEL_0", "score": 0.9}, ...]
-            // LABEL_0 = left, LABEL_1 = center, LABEL_2 = right
-            
-            const labelMap = {
-                'LABEL_0': 'left',
-                'LABEL_1': 'center',
-                'LABEL_2': 'right'
-            };
+        function computeBiasScore(leftProb, centerProb, rightProb) {
+            // Weighted score: -1 (fully left) to +1 (fully right)
+            const score = (-1 * leftProb) + (0 * centerProb) + (1 * rightProb);
 
-            // Convert to our format
-            const scores = {
-                'left': 0,
-                'center': 0,
-                'right': 0
-            };
+            // Map score to granular label
+            let label, cssClass, color;
+            if (score <= -0.6) {
+                label = 'Left';
+                cssClass = 'left';
+                color = '#3b82f6';
+            } else if (score <= -0.2) {
+                label = 'Left-Leaning';
+                cssClass = 'left-leaning';
+                color = '#60a5fa';
+            } else if (score <= 0.2) {
+                label = 'Center';
+                cssClass = 'center';
+                color = '#10b981';
+            } else if (score <= 0.6) {
+                label = 'Right-Leaning';
+                cssClass = 'right-leaning';
+                color = '#f87171';
+            } else {
+                label = 'Right';
+                cssClass = 'right';
+                color = '#ef4444';
+            }
 
-            result[0].forEach(item => {
-                const label = labelMap[item.label];
-                scores[label] = item.score;
-            });
-
-            // Find highest score
-            const predicted = Object.entries(scores).reduce((a, b) => 
-                scores[a[0]] > scores[b[0]] ? a : b
-            )[0];
-
-            // Update label
-            const biasLabel = document.getElementById('biasLabel');
-            biasLabel.textContent = predicted.charAt(0).toUpperCase() + predicted.slice(1);
-            biasLabel.className = `label-${predicted}`;
-
-            // Update confidence bars
-            updateBar('left', scores.left);
-            updateBar('center', scores.center);
-            updateBar('right', scores.right);
-
-            // Show results
-            document.getElementById('results').classList.add('show');
-        }
-
-        function updateBar(label, score) {
-            const percent = (score * 100).toFixed(1);
-            document.getElementById(`${label}Percent`).textContent = `${percent}%`;
-            document.getElementById(`${label}Bar`).style.width = `${percent}%`;
+            return { score, label, cssClass, color };
         }
 
         function showError(message) {
