@@ -40,6 +40,114 @@
             font-size: 1.1em;
         }
 
+        /* URL input section */
+        .url-section {
+            margin-bottom: 0;
+        }
+
+        .url-section label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #444;
+            font-size: 0.95em;
+        }
+
+        .url-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .extract-btn {
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background: #667eea;
+            color: white;
+            white-space: nowrap;
+            transition: all 0.3s;
+        }
+
+        .extract-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .extract-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Divider */
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            gap: 15px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e0e0e0;
+        }
+
+        .divider span {
+            color: #aaa;
+            font-size: 0.85em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Article title display */
+        .article-title {
+            display: none;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #444;
+        }
+
+        .article-title.show {
+            display: block;
+        }
+
+        .article-title .title-label {
+            font-size: 0.75em;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-bottom: 2px;
+        }
+
         textarea {
             width: 100%;
             min-height: 200px;
@@ -63,7 +171,7 @@
             gap: 10px;
         }
 
-        button {
+        button.main-btn {
             flex: 1;
             padding: 15px 30px;
             font-size: 16px;
@@ -279,16 +387,34 @@
         <h1>📰 News Bias Detector</h1>
         <p class="subtitle">Analyze the political bias of any news article using AI</p>
 
+        <!-- URL Input Section -->
+        <div class="url-section">
+            <label for="urlInput">Analyze from URL</label>
+            <div class="url-row">
+                <input type="text" id="urlInput" class="url-input" placeholder="Paste article URL here (e.g. https://www.reuters.com/...)">
+                <button class="extract-btn" id="extractBtn" onclick="extractAndAnalyze()">Extract &amp; Analyze</button>
+            </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="divider"><span>or paste article text</span></div>
+
+        <!-- Article title (shown when extracted from URL) -->
+        <div class="article-title" id="articleTitle">
+            <span class="title-label">Extracted Article</span>
+            <span id="articleTitleText"></span>
+        </div>
+
         <textarea id="articleInput" placeholder="Paste a news article here..."></textarea>
 
         <div class="button-group">
-            <button class="analyze-btn" onclick="analyzeArticle()">Analyze Bias</button>
-            <button class="clear-btn" onclick="clearInput()">Clear</button>
+            <button class="main-btn analyze-btn" onclick="analyzeArticle()">Analyze Bias</button>
+            <button class="main-btn clear-btn" onclick="clearInput()">Clear</button>
         </div>
 
         <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
-            <p>Analyzing article...</p>
+            <p id="loadingText">Analyzing article...</p>
         </div>
 
         <div id="error" class="error" style="display: none;"></div>
@@ -343,6 +469,151 @@
     <script>
         const SPACE_URL = "https://joeljoy1912-news-bias-classifier.hf.space";
 
+        // =============================================
+        // Shared: call Gradio two-step API
+        // =============================================
+        async function callGradioAPI(endpointName, inputData) {
+            // Step 1: Submit to queue
+            const submitResponse = await fetch(`${SPACE_URL}/gradio_api/call/${endpointName}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: inputData })
+            });
+
+            if (!submitResponse.ok) {
+                throw new Error(`Submit error: ${submitResponse.status}`);
+            }
+
+            const { event_id } = await submitResponse.json();
+
+            // Step 2: Get results via SSE stream
+            const resultResponse = await fetch(`${SPACE_URL}/gradio_api/call/${endpointName}/${event_id}`);
+
+            if (!resultResponse.ok) {
+                throw new Error(`Result error: ${resultResponse.status}`);
+            }
+
+            const responseText = await resultResponse.text();
+
+            // Parse SSE stream
+            const lines = responseText.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].startsWith('event: complete')) {
+                    const dataLine = lines[i + 1];
+                    if (dataLine && dataLine.startsWith('data: ')) {
+                        return JSON.parse(dataLine.substring(6));
+                    }
+                }
+                if (lines[i].startsWith('event: error')) {
+                    const dataLine = lines[i + 1];
+                    let errorMsg = 'Model returned an error.';
+                    if (dataLine && dataLine.startsWith('data: ')) {
+                        errorMsg = JSON.parse(dataLine.substring(6));
+                    }
+                    throw new Error(errorMsg);
+                }
+            }
+
+            throw new Error('No result received from model.');
+        }
+
+        // =============================================
+        // Extract probabilities from Gradio Label data
+        // =============================================
+        function extractProbabilities(labelData) {
+            let leftProb = 0, centerProb = 0, rightProb = 0;
+            if (labelData.confidences) {
+                for (const item of labelData.confidences) {
+                    if (item.label === 'Left') leftProb = item.confidence;
+                    else if (item.label === 'Center') centerProb = item.confidence;
+                    else if (item.label === 'Right') rightProb = item.confidence;
+                }
+            }
+            return { leftProb, centerProb, rightProb };
+        }
+
+        // =============================================
+        // Display results on the spectrum
+        // =============================================
+        function displayResults(leftProb, centerProb, rightProb) {
+            const biasResult = computeBiasScore(leftProb, centerProb, rightProb);
+
+            document.getElementById('biasLabel').textContent = biasResult.label;
+            document.getElementById('biasLabel').className = `label-${biasResult.cssClass}`;
+
+            const scoreStr = (biasResult.score >= 0 ? '+' : '') + biasResult.score.toFixed(2);
+            document.getElementById('biasScore').textContent = scoreStr;
+            document.getElementById('biasScore').style.color = biasResult.color;
+
+            const markerPercent = ((biasResult.score + 1) / 2) * 100;
+            document.getElementById('spectrumMarker').style.left = `${markerPercent}%`;
+
+            document.getElementById('leftPercent').textContent = `${(leftProb * 100).toFixed(1)}%`;
+            document.getElementById('centerPercent').textContent = `${(centerProb * 100).toFixed(1)}%`;
+            document.getElementById('rightPercent').textContent = `${(rightProb * 100).toFixed(1)}%`;
+
+            document.getElementById('results').classList.add('show');
+        }
+
+        // =============================================
+        // URL extraction + analysis
+        // =============================================
+        async function extractAndAnalyze() {
+            const url = document.getElementById('urlInput').value.trim();
+
+            if (!url) {
+                showError('Please paste an article URL first.');
+                return;
+            }
+
+            // Basic URL validation
+            if (!url.match(/^https?:\/\/.+\..+/) && !url.match(/^[a-zA-Z0-9].*\..+/)) {
+                showError('Please enter a valid URL (e.g. https://www.reuters.com/...)');
+                return;
+            }
+
+            showLoading('Extracting article from URL...');
+            document.getElementById('extractBtn').disabled = true;
+
+            try {
+                const outputData = await callGradioAPI('extract_and_predict', [url]);
+
+                // outputData = [title, text, labelData]
+                const title = outputData[0];
+                const extractedText = outputData[1];
+                const labelData = outputData[2];
+
+                // Check for error from backend
+                if (title && title.startsWith('Error:')) {
+                    showError(title);
+                    return;
+                }
+
+                // Show the article title
+                if (title) {
+                    document.getElementById('articleTitleText').textContent = title;
+                    document.getElementById('articleTitle').classList.add('show');
+                }
+
+                // Populate textarea with extracted text
+                document.getElementById('articleInput').value = extractedText;
+
+                // Display bias results
+                const { leftProb, centerProb, rightProb } = extractProbabilities(labelData);
+                displayResults(leftProb, centerProb, rightProb);
+
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Failed to extract article. The model may be loading (wait 30s and try again).');
+            } finally {
+                hideLoading();
+                document.getElementById('extractBtn').disabled = false;
+            }
+        }
+
+        // =============================================
+        // Direct text analysis (existing functionality)
+        // =============================================
         async function analyzeArticle() {
             const text = document.getElementById('articleInput').value.trim();
 
@@ -356,107 +627,30 @@
                 return;
             }
 
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('results').classList.remove('show');
-            document.getElementById('error').style.display = 'none';
+            showLoading('Analyzing article...');
             document.querySelector('.analyze-btn').disabled = true;
 
             try {
-                // Step 1: Submit prediction request to Gradio queue
-                const submitResponse = await fetch(`${SPACE_URL}/gradio_api/call/predict_bias`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ data: [text] })
-                });
-
-                if (!submitResponse.ok) {
-                    throw new Error(`Submit error: ${submitResponse.status}`);
-                }
-
-                const { event_id } = await submitResponse.json();
-
-                // Step 2: Fetch results via server-sent events stream
-                const resultResponse = await fetch(`${SPACE_URL}/gradio_api/call/predict_bias/${event_id}`);
-
-                if (!resultResponse.ok) {
-                    throw new Error(`Result error: ${resultResponse.status}`);
-                }
-
-                const responseText = await resultResponse.text();
-
-                // Parse SSE stream — find the "complete" event's data line
-                const lines = responseText.split('\n');
-                let outputData = null;
-                for (let i = 0; i < lines.length; i++) {
-                    if (lines[i].startsWith('event: complete')) {
-                        // The data line follows the event line
-                        const dataLine = lines[i + 1];
-                        if (dataLine && dataLine.startsWith('data: ')) {
-                            outputData = JSON.parse(dataLine.substring(6));
-                            break;
-                        }
-                    }
-                }
-
-                if (!outputData) {
-                    // Check if there was an error event
-                    for (let i = 0; i < lines.length; i++) {
-                        if (lines[i].startsWith('event: error')) {
-                            throw new Error('Model returned an error. It may still be loading.');
-                        }
-                    }
-                    throw new Error('No result received from model.');
-                }
-
-                // Gradio Label component returns: [{"label": "Left", "confidences": [...]}]
-                // outputData is an array matching the output components
+                const outputData = await callGradioAPI('predict_bias', [text]);
                 const labelData = outputData[0];
-
-                // Extract probabilities from confidences array
-                let leftProb = 0, centerProb = 0, rightProb = 0;
-                if (labelData.confidences) {
-                    for (const item of labelData.confidences) {
-                        if (item.label === 'Left') leftProb = item.confidence;
-                        else if (item.label === 'Center') centerProb = item.confidence;
-                        else if (item.label === 'Right') rightProb = item.confidence;
-                    }
-                }
-
-                // Compute continuous bias score: -1 (left) to +1 (right)
-                const biasResult = computeBiasScore(leftProb, centerProb, rightProb);
-
-                // Update spectrum display
-                document.getElementById('biasLabel').textContent = biasResult.label;
-                document.getElementById('biasLabel').className = `label-${biasResult.cssClass}`;
-
-                const scoreStr = (biasResult.score >= 0 ? '+' : '') + biasResult.score.toFixed(2);
-                document.getElementById('biasScore').textContent = scoreStr;
-                document.getElementById('biasScore').style.color = biasResult.color;
-
-                // Position marker on spectrum: convert [-1, +1] to [0%, 100%]
-                const markerPercent = ((biasResult.score + 1) / 2) * 100;
-                document.getElementById('spectrumMarker').style.left = `${markerPercent}%`;
-
-                // Update class breakdown percentages
-                document.getElementById('leftPercent').textContent = `${(leftProb * 100).toFixed(1)}%`;
-                document.getElementById('centerPercent').textContent = `${(centerProb * 100).toFixed(1)}%`;
-                document.getElementById('rightPercent').textContent = `${(rightProb * 100).toFixed(1)}%`;
-
-                document.getElementById('results').classList.add('show');
+                const { leftProb, centerProb, rightProb } = extractProbabilities(labelData);
+                displayResults(leftProb, centerProb, rightProb);
 
             } catch (error) {
                 console.error('Error:', error);
                 showError('Failed to analyze article. The model may be loading (wait 30s and try again).');
             } finally {
-                document.getElementById('loading').style.display = 'none';
+                hideLoading();
                 document.querySelector('.analyze-btn').disabled = false;
             }
         }
+
+        // =============================================
+        // Bias score computation
+        // =============================================
         function computeBiasScore(leftProb, centerProb, rightProb) {
-            // Weighted score: -1 (fully left) to +1 (fully right)
             const score = (-1 * leftProb) + (0 * centerProb) + (1 * rightProb);
 
-            // Map score to granular label
             let label, cssClass, color;
             if (score <= -0.6) {
                 label = 'Left';
@@ -483,22 +677,47 @@
             return { score, label, cssClass, color };
         }
 
-        function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-
-        function clearInput() {
-            document.getElementById('articleInput').value = '';
+        // =============================================
+        // Utility functions
+        // =============================================
+        function showLoading(message) {
+            document.getElementById('loadingText').textContent = message || 'Analyzing article...';
+            document.getElementById('loading').style.display = 'block';
             document.getElementById('results').classList.remove('show');
             document.getElementById('error').style.display = 'none';
         }
 
-        // Allow Enter key to trigger analysis (Ctrl+Enter)
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function clearInput() {
+            document.getElementById('urlInput').value = '';
+            document.getElementById('articleInput').value = '';
+            document.getElementById('results').classList.remove('show');
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('articleTitle').classList.remove('show');
+        }
+
+        // Ctrl+Enter to analyze text
         document.getElementById('articleInput').addEventListener('keydown', function(e) {
             if (e.ctrlKey && e.key === 'Enter') {
                 analyzeArticle();
+            }
+        });
+
+        // Enter key in URL field triggers extract
+        document.getElementById('urlInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                extractAndAnalyze();
             }
         });
     </script>

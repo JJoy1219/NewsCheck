@@ -1,3 +1,5 @@
 transformers
 torch
 gradio
+newspaper3k
+lxml_html_clean
